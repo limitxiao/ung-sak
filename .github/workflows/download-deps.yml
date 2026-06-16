@@ -1,0 +1,44 @@
+name: Download Maven Deps
+on:
+  workflow_dispatch:
+jobs:
+  download-deps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "oracle"
+      - name: Create Maven settings
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>github</id>
+                <username>\${{ github.actor }}</username>
+                <password>\${{ secrets.GITHUB_TOKEN }}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+      - name: Download dependencies
+        run: mvn dependency:resolve dependency:resolve-plugins compile test-compile -DskipTests -B -q 2>&1 || true
+        continue-on-error: true
+      - name: Create tarball of Maven repo
+        run: |
+          cd ~/.m2/repository
+          tar czf /tmp/maven-repo.tar.gz .
+      - name: Upload Maven repo
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-repo
+          path: /tmp/maven-repo.tar.gz
+          retention-days: 1
+
